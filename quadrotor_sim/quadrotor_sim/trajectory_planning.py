@@ -87,21 +87,19 @@ class TrajectoryPlanner:
         return np.array([qw, qx, qy, qz])
 
     def get_flat_outputs(self, test_line):
-        in_pos = self.in_pos[test_line]
-        in_vel = self.in_vel[test_line]
-        in_acc = self.in_acc[test_line]
-        in_jerk = self.in_jerk[test_line]
-        in_snap = self.in_snap[test_line]
-        in_yaw = self.in_yaw[test_line]
-        in_yaw_rate = self.in_yaw_rate[test_line]
-        in_yaw_acceleration = self.in_yaw_acceleration[test_line]
-        mass = self.mass[test_line]
-        gravity = self.gravity[test_line]
-        inertia = self.inertia[test_line]
+        in_pos = np.asarray(self.in_pos[test_line])
+        in_vel = np.asarray(self.in_vel[test_line])
+        in_acc = np.asarray(self.in_acc[test_line])
+        in_jerk = np.asarray(self.in_jerk[test_line])
+        in_snap = np.asarray(self.in_snap[test_line])
+        in_yaw = np.asarray(self.in_yaw[test_line])
+        in_yaw_rate = np.asarray(self.in_yaw_rate[test_line])
+        in_yaw_acceleration = np.asarray(self.in_yaw_acceleration[test_line])
+        mass = np.asarray(self.mass[test_line])
+        gravity = np.asarray(self.gravity[test_line])
+        inertia = np.asarray(self.inertia[test_line])
 
-        #as arrays
-        in_jerk = np.array(in_jerk)
-        in_snap = np.array(in_snap)
+
 
         # output calculation
         out_pos = np.asarray(in_pos)
@@ -125,7 +123,7 @@ class TrajectoryPlanner:
         out_quat = self.rot_to_quat(R)
 
         # desired angular velocity
-        
+        T_dot = mass * in_jerk 
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@ import numpy as np
 
 import pandas as pd
 
-filename = 'trajectory_from_flat_output_test_data.csv'
+
 
 def load_csv(filename):
     df = pd.read_csv(filename)
@@ -99,7 +99,7 @@ class TrajectoryPlanner:
         gravity = np.asarray(self.gravity[test_line])
         inertia = np.asarray(self.inertia[test_line])
 
-
+        zw = np.array([0, 0, 1])
 
         # output calculation
         out_pos = np.asarray(in_pos)
@@ -123,10 +123,72 @@ class TrajectoryPlanner:
         out_quat = self.rot_to_quat(R)
 
         # desired angular velocity
-        T_dot = mass * in_jerk 
+        T_dot = mass * np.dot(in_jerk, zb)
+        h_omega = mass/out_thrust * (in_jerk - np.dot(in_jerk, zb) * zb)
+        omega_x = -np.dot(h_omega, yb)
+        omega_y = np.dot(h_omega, xb)
+        #omega_z = in_yaw_rate * np.array([0, 0, zw]) @ zb
+        omega_z = in_yaw_rate * np.dot(zw, zb)
+        out_omega = np.array([omega_x, omega_y, omega_z])
+
+        # desired torque
+        in_snap_x = in_snap[0]
+        in_snap_y = in_snap[1]
+        in_snap_z = in_snap[2]
+
+        omega_dot_x = -((mass / out_thrust) * (in_snap_y - 2 * in_jerk[2] * omega_x) - omega_y * omega_z)
+        omega_dot_y = ((mass / out_thrust) * (in_snap_x - 2 * in_jerk[2] * omega_y) - omega_x * omega_z)
+        #omega_dot_z = in_yaw_acceleration * omega_z
+        omega_dot_z = in_yaw_acceleration * (zw @ zb)
+
+        #print(f"omega_x: {omega_x}, omega_y: {omega_y}, omega_z: {omega_z}")
+        #print(f"omega_dot_x: {omega_dot_x}, omega_dot_y: {omega_dot_y}, omega_dot_z: {omega_dot_z}")
+        omega_dot = np.array([omega_dot_x, omega_dot_y, omega_dot_z])
+
+        out_torque = inertia * omega_dot + np.cross(out_omega, inertia * out_omega)
+
+        return out_pos, out_quat, out_vel, out_omega, out_thrust, out_torque
 
 
 if __name__ == "__main__":
+    filename = 'trajectory_from_flat_output_test_data.csv'
     read_trajectory_data_print(filename, test_line=0)
+
+    file = load_csv(filename)
+    num_tests = len(file)
+    print(f"\nTotal number of tests in the file: {num_tests}")
+
+    #create class
+    planner = TrajectoryPlanner(filename)
+    successes = 0
+    failures = 0
+    failed_tests = set()
+
+    for test_line in range(num_tests):
+        out_pos, out_quat, out_vel, out_omega, out_thrust, out_torque = planner.get_flat_outputs(test_line)
+
+        received_return = np.concatenate(
+            [out_pos, out_quat, out_vel, out_omega, [out_thrust], out_torque]
+        )
+        expected_return = np.concatenate(
+            [planner.out_pos[test_line], planner.out_quat[test_line], planner.out_vel[test_line], planner.out_omega[test_line], [planner.out_thrust[test_line]], planner.out_torque[test_line]]
+        )
+        # Compare received and expected returns
+
+        if not np.allclose(received_return, expected_return):
+            print(f"Test line {test_line} failed!")
+
+            print("Received return:", received_return)
+            print("Expected return:", expected_return)
+            failures += 1
+            failed_tests.add(test_line)
+        else:
+            print(f"Test line {test_line} passed!")
+            successes += 1
+
+        
+    print(f"\nTotal successes: {successes}")
+    print(f"Total failures: {failures}")
+    print(f"Failed test lines: {sorted(failed_tests)}")
     pass
 

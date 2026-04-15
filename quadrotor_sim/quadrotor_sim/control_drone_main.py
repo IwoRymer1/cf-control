@@ -72,53 +72,70 @@ class QuadrotorModel:
             ]
         )
 
-    def dynamics(self, u):
-        """
-        u = [T, tau_x, tau_y, tau_z]
-        """
-
+    def dynamics_from_state(self, pos, vel, q, omega, u):
         T = u[0]
         tau = u[1:4]
 
-        # --- translacja ---
-        R = self.quat_to_rot(self.q)
-        thrust_body = np.array([0, 0, T])
-        thrust_world = R @ thrust_body
+        # translation
+        R = self.quat_to_rot(q)
+        thrust_world = R @ np.array([0.0, 0.0, T])
 
-        pos_dot = self.vel
-        vel_dot = np.array([0, 0, -self.g]) + thrust_world / self.m
-        vel_dot -= self.k_drag * self.vel  # opór powietrza
+        pos_dot = vel
+        vel_dot = np.array([0.0, 0.0, -self.g]) + thrust_world / self.m
+        vel_dot -= self.k_drag * vel
 
-        # --- rotacja (kwaternion) ---
-        omega_quat = np.array([0, *self.omega])
-        q_dot = 0.5 * self.quat_mul(self.q, omega_quat)
+        # quaternion
+        omega_quat = np.array([0.0, *omega])
+        q_dot = 0.5 * self.quat_mul(q, omega_quat)
 
-        # --- dynamika obrotowa ---
-        omega_dot = self.invI @ (tau - np.cross(self.omega, self.I @ self.omega))
-        omega_dot -= self.k_roll * self.omega  # tłumienie obrotów
+        # rotational dynamics
+        omega_dot = self.invI @ (tau - np.cross(omega, self.I @ omega))
+        omega_dot -= self.k_roll * omega
 
         return pos_dot, vel_dot, q_dot, omega_dot
 
     def step(self, u, dt):
-        pos_dot, vel_dot, q_dot, omega_dot = self.dynamics(u)
+        pos0 = self.pos.copy()
+        vel0 = self.vel.copy()
+        q0 = self.q.copy()
+        omega0 = self.omega.copy()
 
-        # Euler (można podmienić na RK4)
-        # self.pos += dt * pos_dot
-        # self.vel += dt * vel_dot
-        # self.q += dt * q_dot
-        # self.omega += dt * omega_dot
+        # k1
+        k1 = self.dynamics_from_state(pos0, vel0, q0, omega0, u)
 
-        # RK 4
-        k1_pos, k1_vel, k1_q, k1_omega = self.dynamics(u)
-        k2_pos, k2_vel, k2_q, k2_omega = self.dynamics(u)
-        k3_pos, k3_vel, k3_q, k3_omega = self.dynamics(u)
-        k4_pos, k4_vel, k4_q, k4_omega = self.dynamics(u)
-        self.pos += (dt / 6) * (k1_pos + 2 * k2_pos + 2 * k3_pos + k4_pos)
-        self.vel += (dt / 6) * (k1_vel + 2 * k2_vel + 2 * k3_vel + k4_vel)
-        self.q += (dt / 6) * (k1_q + 2 * k2_q + 2 * k3_q + k4_q)
-        self.omega += (dt / 6) * (k1_omega + 2 * k2_omega + 2 * k3_omega + k4_omega)
+        # k2
+        k2_state = (
+            pos0 + 0.5 * dt * k1[0],
+            vel0 + 0.5 * dt * k1[1],
+            self.normalize_quat(q0 + 0.5 * dt * k1[2]),
+            omega0 + 0.5 * dt * k1[3],
+        )
+        k2 = self.dynamics_from_state(*k2_state, u)
 
-        # normalizacja kwaternionu
+        # k3
+        k3_state = (
+            pos0 + 0.5 * dt * k2[0],
+            vel0 + 0.5 * dt * k2[1],
+            self.normalize_quat(q0 + 0.5 * dt * k2[2]),
+            omega0 + 0.5 * dt * k2[3],
+        )
+        k3 = self.dynamics_from_state(*k3_state, u)
+
+        # k4
+        k4_state = (
+            pos0 + dt * k3[0],
+            vel0 + dt * k3[1],
+            self.normalize_quat(q0 + dt * k3[2]),
+            omega0 + dt * k3[3],
+        )
+        k4 = self.dynamics_from_state(*k4_state, u)
+
+        # final update
+        self.pos = pos0 + (dt / 6.0) * (k1[0] + 2*k2[0] + 2*k3[0] + k4[0])
+        self.vel = vel0 + (dt / 6.0) * (k1[1] + 2*k2[1] + 2*k3[1] + k4[1])
+        self.q = q0 + (dt / 6.0) * (k1[2] + 2*k2[2] + 2*k3[2] + k4[2])
+        self.omega = omega0 + (dt / 6.0) * (k1[3] + 2*k2[3] + 2*k3[3] + k4[3])
+
         self.q = self.normalize_quat(self.q)
 
     def get_state(self):
@@ -141,7 +158,7 @@ quad = QuadrotorModel(
 )
 
 # hover (powinno wisieć)
-u = np.array([m * 9.81 * 1.0, 0.5, 0, 0])
+u = np.array([m * 9.81 * 1, 0, 0, 0])
 
 for i in range(1000):
     quad.step(u, dt=0.001)

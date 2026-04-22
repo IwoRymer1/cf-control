@@ -131,10 +131,10 @@ class QuadrotorModel:
         k4 = self.dynamics_from_state(*k4_state, u)
 
         # final update
-        self.pos = pos0 + (dt / 6.0) * (k1[0] + 2*k2[0] + 2*k3[0] + k4[0])
-        self.vel = vel0 + (dt / 6.0) * (k1[1] + 2*k2[1] + 2*k3[1] + k4[1])
-        self.q = q0 + (dt / 6.0) * (k1[2] + 2*k2[2] + 2*k3[2] + k4[2])
-        self.omega = omega0 + (dt / 6.0) * (k1[3] + 2*k2[3] + 2*k3[3] + k4[3])
+        self.pos = pos0 + (dt / 6.0) * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0])
+        self.vel = vel0 + (dt / 6.0) * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1])
+        self.q = q0 + (dt / 6.0) * (k1[2] + 2 * k2[2] + 2 * k3[2] + k4[2])
+        self.omega = omega0 + (dt / 6.0) * (k1[3] + 2 * k2[3] + 2 * k3[3] + k4[3])
 
         self.q = self.normalize_quat(self.q)
 
@@ -157,14 +157,15 @@ quad = QuadrotorModel(
     m=m, L=L, I=I_diag, kf=kf, km=km, k_drag=k_drag, k_roll=k_roll, omega_max=omega_max
 )
 
-# hover (powinno wisieć)
-u = np.array([m * 9.81 * 1, 0, 0, 0])
 
-for i in range(1000):
-    quad.step(u, dt=0.001)
-    if i % 100 == 0:
-        print(quad.get_state()['pos'], quad.get_state()['vel'], quad.get_state()['quat'])
+if __name__ == '__maine__':
+    # hover (powinno wisieć)
+    u = np.array([m * 9.81 * 1, 0, 0, 0])
 
+    for i in range(1000):
+        quad.step(u, dt=0.001)
+        if i % 100 == 0:
+            print(quad.get_state()['pos'], quad.get_state()['vel'], quad.get_state()['quat'])
 
-# task:
-# obtain state from flat output
+    # task:
+    # obtain state from flat output

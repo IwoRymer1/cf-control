@@ -1,16 +1,15 @@
 import numpy as np
-
 import pandas as pd
-
 
 
 def load_csv(filename):
     df = pd.read_csv(filename)
-    
-    #print(df.columns)
+
+    # print(df.columns)
     # test_name	in_pos_x	in_pos_y	in_pos_z	in_vel_x	in_vel_y	in_vel_z	in_acc_x	in_acc_y	in_acc_z	in_jerk_x	in_jerk_y	in_jerk_z	in_snap_x	in_snap_y	in_snap_z	in_yaw	in_yaw_rate	in_yaw_acceleration	in_mass	in_gravity	in_I_xx	in_I_yy	in_I_zz	out_pos_x	out_pos_y	out_pos_z	out_quat_w	out_quat_x	out_quat_y	out_quat_z	out_vel_x	out_vel_y	out_vel_z	out_omega_x	out_omega_y	out_omega_z	out_thrust	out_torque_x	out_torque_y	out_torque_z
-    #print(df.head())
+    # print(df.head())
     return df
+
 
 def read_trajectory_data_print(filename, test_line):
     # first test in second line
@@ -29,32 +28,34 @@ def read_trajectory_data_print(filename, test_line):
     gravity = row['in_gravity']
     I = np.array([row['in_I_xx'], row['in_I_yy'], row['in_I_zz']])
     out_pos = np.array([row['out_pos_x'], row['out_pos_y'], row['out_pos_z']])
-    out_quat = np.array([row['out_quat_w'], row['out_quat_x'], row['out_quat_y'], row['out_quat_z']])
+    out_quat = np.array(
+        [row['out_quat_w'], row['out_quat_x'], row['out_quat_y'], row['out_quat_z']]
+    )
     out_vel = np.array([row['out_vel_x'], row['out_vel_y'], row['out_vel_z']])
     out_omega = np.array([row['out_omega_x'], row['out_omega_y'], row['out_omega_z']])
     out_thrust = row['out_thrust']
     out_torque = np.array([row['out_torque_x'], row['out_torque_y'], row['out_torque_z']])
 
-    print("Input trajectory data:")
-    print("Position:", in_pos)
-    print("Velocity:", in_vel)
-    print("Acceleration:", in_acc)
-    print("Jerk:", in_jerk)
-    print("Snap:", in_snap)
-    print("Yaw:", in_yaw)
-    print("Yaw rate:", in_yaw_rate)
-    print("Yaw acceleration:", in_yaw_acceleration)
-    print("Mass:", mass)
-    print("Gravity:", gravity)
-    print("Inertia:", I)
-    
-    print("\nExpected output data:")
-    print("Position:", out_pos)
-    print("Quaternion:", out_quat)
-    print("Velocity:", out_vel)
-    print("Angular velocity:", out_omega)
-    print("Thrust:", out_thrust)
-    print("Torque:", out_torque)
+    print('Input trajectory data:')
+    print('Position:', in_pos)
+    print('Velocity:', in_vel)
+    print('Acceleration:', in_acc)
+    print('Jerk:', in_jerk)
+    print('Snap:', in_snap)
+    print('Yaw:', in_yaw)
+    print('Yaw rate:', in_yaw_rate)
+    print('Yaw acceleration:', in_yaw_acceleration)
+    print('Mass:', mass)
+    print('Gravity:', gravity)
+    print('Inertia:', I)
+
+    print('\nExpected output data:')
+    print('Position:', out_pos)
+    print('Quaternion:', out_quat)
+    print('Velocity:', out_vel)
+    print('Angular velocity:', out_omega)
+    print('Thrust:', out_thrust)
+    print('Torque:', out_torque)
 
 
 class TrajectoryPlanner:
@@ -73,17 +74,21 @@ class TrajectoryPlanner:
         self.gravity = self.trajectory_data['in_gravity'].values
         self.inertia = self.trajectory_data[['in_I_xx', 'in_I_yy', 'in_I_zz']].values
         self.out_pos = self.trajectory_data[['out_pos_x', 'out_pos_y', 'out_pos_z']].values
-        self.out_quat = self.trajectory_data[['out_quat_w', 'out_quat_x', 'out_quat_y', 'out_quat_z']].values
+        self.out_quat = self.trajectory_data[
+            ['out_quat_w', 'out_quat_x', 'out_quat_y', 'out_quat_z']
+        ].values
         self.out_vel = self.trajectory_data[['out_vel_x', 'out_vel_y', 'out_vel_z']].values
         self.out_omega = self.trajectory_data[['out_omega_x', 'out_omega_y', 'out_omega_z']].values
         self.out_thrust = self.trajectory_data['out_thrust'].values
-        self.out_torque = self.trajectory_data[['out_torque_x', 'out_torque_y', 'out_torque_z']].values
-    
+        self.out_torque = self.trajectory_data[
+            ['out_torque_x', 'out_torque_y', 'out_torque_z']
+        ].values
+
     def rot_to_quat(self, R):
         qw = np.sqrt(1 + np.trace(R)) / 2
-        qx = (R[2,1] - R[1,2]) / (4*qw)
-        qy = (R[0,2] - R[2,0]) / (4*qw)
-        qz = (R[1,0] - R[0,1]) / (4*qw)
+        qx = (R[2, 1] - R[1, 2]) / (4 * qw)
+        qy = (R[0, 2] - R[2, 0]) / (4 * qw)
+        qz = (R[1, 0] - R[0, 1]) / (4 * qw)
         return np.array([qw, qx, qy, qz])
 
     def get_flat_outputs(self, test_line):
@@ -111,11 +116,11 @@ class TrajectoryPlanner:
 
         zb = Tzb / np.linalg.norm(Tzb)
         out_yaw = in_yaw
-        
+
         # desired heading direction
         xc = np.array([np.cos(out_yaw), np.sin(out_yaw), 0])
 
-        #based on that we place the body frame
+        # based on that we place the body frame
         yb = np.cross(zb, xc)
         yb /= np.linalg.norm(yb)
         xb = np.cross(yb, zb)
@@ -124,10 +129,10 @@ class TrajectoryPlanner:
 
         # desired angular velocity
         T_dot = mass * np.dot(in_jerk, zb)
-        h_omega = mass/out_thrust * (in_jerk - np.dot(in_jerk, zb) * zb)
+        h_omega = mass / out_thrust * (in_jerk - np.dot(in_jerk, zb) * zb)
         omega_x = -np.dot(h_omega, yb)
         omega_y = np.dot(h_omega, xb)
-        #omega_z = in_yaw_rate * np.array([0, 0, zw]) @ zb
+        # omega_z = in_yaw_rate * np.array([0, 0, zw]) @ zb
         omega_z = in_yaw_rate * np.dot(zw, zb)
         out_omega = np.array([omega_x, omega_y, omega_z])
 
@@ -136,59 +141,80 @@ class TrajectoryPlanner:
         in_snap_y = in_snap[1]
         in_snap_z = in_snap[2]
 
-        omega_dot_x = -((mass / out_thrust) * (in_snap_y - 2 * in_jerk[2] * omega_x) - omega_y * omega_z)
-        omega_dot_y = ((mass / out_thrust) * (in_snap_x - 2 * in_jerk[2] * omega_y) - omega_x * omega_z)
-        #omega_dot_z = in_yaw_acceleration * omega_z
+        omega_dot_x = -(
+            (mass / out_thrust) * (in_snap_y - 2 * in_jerk[2] * omega_x) - omega_y * omega_z
+        )
+        omega_dot_y = (mass / out_thrust) * (
+            in_snap_x - 2 * in_jerk[2] * omega_y
+        ) - omega_x * omega_z
+        # omega_dot_z = in_yaw_acceleration * omega_z
         omega_dot_z = in_yaw_acceleration * (zw @ zb)
 
-        #print(f"omega_x: {omega_x}, omega_y: {omega_y}, omega_z: {omega_z}")
-        #print(f"omega_dot_x: {omega_dot_x}, omega_dot_y: {omega_dot_y}, omega_dot_z: {omega_dot_z}")
+        # print(f"omega_x: {omega_x}, omega_y: {omega_y}, omega_z: {omega_z}")
+        # print(f"omega_dot_x: {omega_dot_x}, omega_dot_y: {omega_dot_y}, omega_dot_z: {omega_dot_z}")
         omega_dot = np.array([omega_dot_x, omega_dot_y, omega_dot_z])
 
         out_torque = inertia * omega_dot + np.cross(out_omega, inertia * out_omega)
 
-        return out_pos, out_quat, out_vel, out_omega, out_thrust, out_torque
+        return {
+            'pos': out_pos,
+            'quat': out_quat,
+            'vel': out_vel,
+            'acc': in_acc,
+            'R': R,
+            'omega': out_omega,
+            'omega_dot': omega_dot,
+            'thrust': out_thrust,
+            'torque': out_torque,
+        }
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     filename = 'trajectory_from_flat_output_test_data.csv'
     read_trajectory_data_print(filename, test_line=0)
 
     file = load_csv(filename)
     num_tests = len(file)
-    print(f"\nTotal number of tests in the file: {num_tests}")
+    print(f'\nTotal number of tests in the file: {num_tests}')
 
-    #create class
+    # create class
     planner = TrajectoryPlanner(filename)
     successes = 0
     failures = 0
     failed_tests = set()
 
     for test_line in range(num_tests):
-        out_pos, out_quat, out_vel, out_omega, out_thrust, out_torque = planner.get_flat_outputs(test_line)
+        out_pos, out_quat, out_vel, out_omega, out_thrust, out_torque = planner.get_flat_outputs(
+            test_line
+        )
 
         received_return = np.concatenate(
             [out_pos, out_quat, out_vel, out_omega, [out_thrust], out_torque]
         )
         expected_return = np.concatenate(
-            [planner.out_pos[test_line], planner.out_quat[test_line], planner.out_vel[test_line], planner.out_omega[test_line], [planner.out_thrust[test_line]], planner.out_torque[test_line]]
+            [
+                planner.out_pos[test_line],
+                planner.out_quat[test_line],
+                planner.out_vel[test_line],
+                planner.out_omega[test_line],
+                [planner.out_thrust[test_line]],
+                planner.out_torque[test_line],
+            ]
         )
         # Compare received and expected returns
 
         if not np.allclose(received_return, expected_return):
-            print(f"Test line {test_line} failed!")
+            print(f'Test line {test_line} failed!')
 
-            print("Received return:", received_return)
-            print("Expected return:", expected_return)
+            print('Received return:', received_return)
+            print('Expected return:', expected_return)
             failures += 1
             failed_tests.add(test_line)
         else:
-            print(f"Test line {test_line} passed!")
+            print(f'Test line {test_line} passed!')
             successes += 1
 
-        
-    print(f"\nTotal successes: {successes}")
-    print(f"Total failures: {failures}")
-    print(f"Failed test lines: {sorted(failed_tests)}")
+    print(f'\nTotal successes: {successes}')
+    print(f'Total failures: {failures}')
+    print(f'Failed test lines: {sorted(failed_tests)}')
     pass
-

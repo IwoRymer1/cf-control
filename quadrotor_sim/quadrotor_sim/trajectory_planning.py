@@ -59,30 +59,45 @@ def read_trajectory_data_print(filename, test_line):
 
 
 class TrajectoryPlanner:
-    def __init__(self, filename):
-        self.filename = filename
-        self.trajectory_data = load_csv(filename)
-        self.in_pos = self.trajectory_data[['in_pos_x', 'in_pos_y', 'in_pos_z']].values
-        self.in_vel = self.trajectory_data[['in_vel_x', 'in_vel_y', 'in_vel_z']].values
-        self.in_acc = self.trajectory_data[['in_acc_x', 'in_acc_y', 'in_acc_z']].values
-        self.in_jerk = self.trajectory_data[['in_jerk_x', 'in_jerk_y', 'in_jerk_z']].values
-        self.in_snap = self.trajectory_data[['in_snap_x', 'in_snap_y', 'in_snap_z']].values
-        self.in_yaw = self.trajectory_data['in_yaw'].values
-        self.in_yaw_rate = self.trajectory_data['in_yaw_rate'].values
-        self.in_yaw_acceleration = self.trajectory_data['in_yaw_acceleration'].values
-        self.mass = self.trajectory_data['in_mass'].values
-        self.gravity = self.trajectory_data['in_gravity'].values
-        self.inertia = self.trajectory_data[['in_I_xx', 'in_I_yy', 'in_I_zz']].values
-        self.out_pos = self.trajectory_data[['out_pos_x', 'out_pos_y', 'out_pos_z']].values
-        self.out_quat = self.trajectory_data[
-            ['out_quat_w', 'out_quat_x', 'out_quat_y', 'out_quat_z']
-        ].values
-        self.out_vel = self.trajectory_data[['out_vel_x', 'out_vel_y', 'out_vel_z']].values
-        self.out_omega = self.trajectory_data[['out_omega_x', 'out_omega_y', 'out_omega_z']].values
-        self.out_thrust = self.trajectory_data['out_thrust'].values
-        self.out_torque = self.trajectory_data[
-            ['out_torque_x', 'out_torque_y', 'out_torque_z']
-        ].values
+    def __init__(self, filename: str, state_data=None):
+        if state_data is not None:
+            self.in_pos = state_data['in_pos']
+            self.in_vel = state_data['in_vel']
+            self.in_acc = state_data['in_acc']
+            self.in_jerk = state_data['in_jerk']
+            self.in_snap = state_data['in_snap']
+            self.in_yaw = state_data['in_yaw']
+            self.in_yaw_rate = state_data['in_yaw_rate']
+            self.in_yaw_acceleration = state_data['in_yaw_acceleration']
+            self.mass = state_data['mass']
+            self.gravity = state_data['gravity']
+            self.inertia = state_data['inertia']
+        else:
+            self.filename = filename
+            self.trajectory_data = load_csv(filename)
+            self.in_pos = self.trajectory_data[['in_pos_x', 'in_pos_y', 'in_pos_z']].values
+            self.in_vel = self.trajectory_data[['in_vel_x', 'in_vel_y', 'in_vel_z']].values
+            self.in_acc = self.trajectory_data[['in_acc_x', 'in_acc_y', 'in_acc_z']].values
+            self.in_jerk = self.trajectory_data[['in_jerk_x', 'in_jerk_y', 'in_jerk_z']].values
+            self.in_snap = self.trajectory_data[['in_snap_x', 'in_snap_y', 'in_snap_z']].values
+            self.in_yaw = self.trajectory_data['in_yaw'].values
+            self.in_yaw_rate = self.trajectory_data['in_yaw_rate'].values
+            self.in_yaw_acceleration = self.trajectory_data['in_yaw_acceleration'].values
+            self.mass = self.trajectory_data['in_mass'].values
+            self.gravity = self.trajectory_data['in_gravity'].values
+            self.inertia = self.trajectory_data[['in_I_xx', 'in_I_yy', 'in_I_zz']].values
+            self.out_pos = self.trajectory_data[['out_pos_x', 'out_pos_y', 'out_pos_z']].values
+            self.out_quat = self.trajectory_data[
+                ['out_quat_w', 'out_quat_x', 'out_quat_y', 'out_quat_z']
+            ].values
+            self.out_vel = self.trajectory_data[['out_vel_x', 'out_vel_y', 'out_vel_z']].values
+            self.out_omega = self.trajectory_data[
+                ['out_omega_x', 'out_omega_y', 'out_omega_z']
+            ].values
+            self.out_thrust = self.trajectory_data['out_thrust'].values
+            self.out_torque = self.trajectory_data[
+                ['out_torque_x', 'out_torque_y', 'out_torque_z']
+            ].values
 
     def rot_to_quat(self, R):
         qw = np.sqrt(1 + np.trace(R)) / 2

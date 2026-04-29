@@ -79,7 +79,7 @@ class LeeSE3Controller:
 
         A = -self.kx @ ex - self.kv @ ev - self.m * self.g * e3 + self.m * ad
 
-        f = -A @ (R.T @ e3)
+        f = A @ (R.T @ e3)
 
         # attitude errors
         eR = 0.5 * self.vee(Rd.T @ R - R.T @ Rd)
@@ -96,16 +96,6 @@ class LeeSE3Controller:
         return f, M
 
 
-filename = 'trajectory_from_flat_output_test_data.csv'
-planner = traj_plan.TrajectoryPlanner(filename)
-
-quad = QuadrotorModel.QuadrotorModel(
-    m=m, L=L, I=I_diag, kf=kf, km=km, k_drag=k_drag, k_roll=k_roll, omega_max=omega_max
-)
-
-controller = LeeSE3Controller(quad)
-
-
 def test_controller(test_line):
     desired_state = planner.get_flat_outputs(test_line)
     state = {
@@ -118,26 +108,84 @@ def test_controller(test_line):
     return f, M
 
 
-def run_simulation(test_line, dt=0.01, total_time=5.0):
-    desired_state = planner.get_flat_outputs(test_line)
-    state = {
-        'pos': desired_state['pos'],
-        'vel': desired_state['vel'],
-        'quat': desired_state['quat'],
-        'omega': desired_state['omega'],
-    }
+def test_all_lines(filename):
+
+    file = traj_plan.load_csv(filename)
+    num_tests = len(file)
+    results = []
+    for test_line in range(num_tests):
+        f, M = test_controller(test_line)
+        results.append((f, M))
+    return results
+
+
+def run_simulation(test_line=None, dt=0.01, total_time=5.0):
+
+    if test_line is None:
+        desired_state = {
+            'pos': np.array([0, 0, 1]),
+            'vel': np.zeros(3),
+            'omega': np.zeros(3),
+            'R': np.eye(3),
+            'omega_dot': np.zeros(3),
+            'acc': np.zeros(3),
+            'quat': np.array([1, 0, 0, 0]),
+        }
+
+        state = {
+            'pos': np.zeros(3),
+            'vel': np.zeros(3),
+            'omega': np.zeros(3),
+            'quat': np.array([1, 0, 0, 0]),
+        }
+    else:
+        desired_state = planner.get_flat_outputs(test_line)
+        state = {
+            'pos': desired_state['pos'],
+            'vel': desired_state['vel'],
+            'quat': desired_state['quat'],
+            'omega': desired_state['omega'],
+        }
 
     num_steps = int(total_time / dt)
     for step in range(num_steps):
         f, M = controller.control(state, desired_state)
         quad.set_state(**state)
-        quad.step(np.concatenate([f, M]), dt)
+        u = np.asarray([f, M[0], M[1], M[2]])
+        quad.step(u, dt)
         state = quad.get_state()
         print(
             f'Step {step}: pos={state["pos"]}, vel={state["vel"]}, quat={state["quat"]}, omega={state["omega"]}'
         )
 
 
+def test_takeoff():
+    desired_state = {
+        'pos': np.array([0, 0, -1]),
+        'vel': np.zeros(3),
+        'omega': np.zeros(3),
+        'R': np.eye(3),
+        'omega_dot': np.zeros(3),
+        'acc': np.zeros(3),
+    }
+    state = {
+        'pos': np.zeros(3),
+        'vel': np.zeros(3),
+        'omega': np.zeros(3),
+    }
+    f, M = controller.control(state, desired_state)
+    print(f'Takeoff control output: f={f}, M={M}')
+
+
 if __name__ == '__main__':
-    test_line = 1
-    run_simulation(test_line)
+    filename = 'trajectory_from_flat_output_test_data.csv'
+
+    filename = 'trajectory_from_flat_output_test_data.csv'
+    planner = traj_plan.TrajectoryPlanner(filename)
+
+    quad = QuadrotorModel.QuadrotorModel(
+        m=m, L=L, I=I_diag, kf=kf, km=km, k_drag=k_drag, k_roll=k_roll, omega_max=omega_max
+    )
+
+    controller = LeeSE3Controller(quad)
+    run_simulation()

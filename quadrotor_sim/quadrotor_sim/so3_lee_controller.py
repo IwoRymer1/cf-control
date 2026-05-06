@@ -27,17 +27,22 @@ omega_max = 2618
 
 
 class LeeSE3Controller:
-    def __init__(self, model):
+    def __init__(self, model, dt=0.01):
         self.m = model.m
         self.g = model.g
         self.J = model.I
+        self.dt = dt
 
         # tunable params
         self.kx = np.diag([6, 6, 8])
         self.kv = np.diag([4, 4, 5])
 
-        self.kR = np.diag([8, 8, 1])
-        self.kOmega = np.diag([0.15, 0.15, 0.1])
+        self.kR = np.diag([2, 2, 0.5])
+        self.kOmega = np.diag([0.05, 0.05, 0.02])
+
+        self.Rd_prev = np.eye(3)
+
+        self.M_max = 1e-1
 
     def hat(self, x):
         return np.array([[0, -x[2], x[1]], [x[2], 0, -x[0]], [-x[1], x[0], 0]])
@@ -63,35 +68,77 @@ class LeeSE3Controller:
         omega = state['omega']
 
         R = self.quat_to_rot(q)
+
         xd = desired_state['pos']
         vd = desired_state['vel']
         ad = desired_state['acc']
 
-        Rd = desired_state['R']
-        Omegad = desired_state['omega']
-        Omegad_dot = desired_state['omega_dot']
+        # optional yaw input (default = 0)
+        yaw = desired_state.get('yaw', 0.0)
+        yaw_rate = desired_state.get('yaw_rate', 0.0)
 
-        e3 = np.array([0, 0, 1])
+        e3 = np.array([0.0, 0.0, 1.0])
 
-        # translational errors
+        # --- position control ---
         ex = x - xd
         ev = v - vd
 
         A = -self.kx @ ex - self.kv @ ev - self.m * self.g * e3 + self.m * ad
 
-        f = A @ (R.T @ e3)
+        f = A @ (R @ e3)
+        f = max(0.0, f)
 
-        # attitude errors
+        # attitude
+        if np.linalg.norm(A) < 1e-6:
+            b3d = np.array([0, 0, 1])
+        else:
+            b3d = A / np.linalg.norm(A)
+
+        b1c = np.array([np.cos(yaw), np.sin(yaw), 0.0])
+
+        b2d = np.cross(b3d, b1c)
+        norm_b2d = np.linalg.norm(b2d)
+        if norm_b2d < 1e-6:
+            b2d = np.array([0, 1, 0])
+        else:
+            b2d = b2d / norm_b2d
+
+        b1d = np.cross(b2d, b3d)
+
+        Rd = np.column_stack((b1d, b2d, b3d))
+
+        # numerical derivative of Rd
+# --- desired angular velocity ---
+        R_err = self.Rd_prev.T @ Rd
+        Omega_hat = 0.5 * (R_err - R_err.T)
+        Omegad = self.vee(Omega_hat) / self.dt
+
+        # clamp
+        Omegad = np.clip(Omegad, -50.0, 50.0)
+
+        self.Rd_prev = Rd.copy()
+
+        Omegad_dot = np.zeros(3)
+
+        self.Rd_prev = Rd.copy()
+
+        # --- attitude errors ---
         eR = 0.5 * self.vee(Rd.T @ R - R.T @ Rd)
         eOmega = omega - R.T @ Rd @ Omegad
 
-        # control moment
+        # --- control moment ---
         M = (
             -self.kR @ eR
             - self.kOmega @ eOmega
             + np.cross(omega, self.J @ omega)
-            - self.J @ (self.hat(omega) @ R.T @ Rd @ Omegad - R.T @ Rd @ Omegad_dot)
+            - self.J @ (
+                self.hat(omega) @ R.T @ Rd @ Omegad
+                - R.T @ Rd @ Omegad_dot
+            )
         )
+
+        M = np.clip(M, -self.M_max, self.M_max)
+
 
         return f, M
 
@@ -123,12 +170,12 @@ def run_simulation(test_line=None, dt=0.01, total_time=5.0):
 
     if test_line is None:
         desired_state = {
-            'pos': np.array([0, 0, 1]),
+            'pos': np.array([-1, 1, 0]),
             'vel': np.zeros(3),
-            'omega': np.zeros(3),
+            'omega': np.array([0, 0, 0]),
             'R': np.eye(3),
             'omega_dot': np.zeros(3),
-            'acc': np.zeros(3),
+            'acc': np.array([-0.1, 0.1, 0]),
             'quat': np.array([1, 0, 0, 0]),
         }
 
@@ -161,12 +208,13 @@ def run_simulation(test_line=None, dt=0.01, total_time=5.0):
 
 def test_takeoff():
     desired_state = {
-        'pos': np.array([0, 0, -1]),
+        'pos': np.array([0, 0, 0]),
         'vel': np.zeros(3),
         'omega': np.zeros(3),
         'R': np.eye(3),
         'omega_dot': np.zeros(3),
         'acc': np.zeros(3),
+        'quat': np.array([1, 0, 0, 0]),
     }
     state = {
         'pos': np.zeros(3),
@@ -175,6 +223,50 @@ def test_takeoff():
     }
     f, M = controller.control(state, desired_state)
     print(f'Takeoff control output: f={f}, M={M}')
+
+def smooth_yaw_test(dt=0.01, total_time=3.0, initial_yaw=0.0, final_yaw=np.pi/4, yaw_rate=0.1):
+    desired_state = {
+        'pos': np.array([0, 0, 0]),
+        'vel': np.zeros(3),
+        'omega': np.zeros(3),
+        'R': np.eye(3),
+        'omega_dot': np.zeros(3),
+        'acc': np.zeros(3),
+        'yaw': final_yaw,
+        'yaw_rate': yaw_rate,
+        'quat': np.array([1, 0, 0, 0]),
+    }
+    state = {
+        'pos': np.zeros(3),
+        'vel': np.zeros(3),
+        'omega': np.zeros(3),
+        'quat': np.array([1, 0, 0, 0]),
+    }
+    f, M = controller.control(state, desired_state)
+    print(f'Smooth yaw test control output: f={f}, M={M}')
+
+    num_steps = int(total_time / dt)
+    reached_final = False
+    print_every_n = 10
+    for step in range(num_steps):
+
+        f, M = controller.control(state, desired_state)
+        quad.set_state(**state)
+        u = np.asarray([f, M[0], M[1], M[2]])
+        quad.step(u, dt)
+        state = quad.get_state()
+
+        Rotation_matrix = controller.quat_to_rot(state['quat'])
+        yaw = np.arctan2(Rotation_matrix[1, 0], Rotation_matrix[0, 0])
+        yaw_deg = np.degrees(yaw)
+        if step % print_every_n == 0:
+            print(
+                f'Step {step}: pos={state["pos"]}, vel={state["vel"]}, quat={state["quat"]}, omega={state["omega"]}')
+            print(f'Current yaw: {yaw_deg:.2f} degrees')
+            yaw_error = desired_state['yaw'] - yaw
+            print(f"Yaw error: {np.degrees(yaw_error):.2f}")
+        
+
 
 
 if __name__ == '__main__':
@@ -186,6 +278,6 @@ if __name__ == '__main__':
     quad = QuadrotorModel.QuadrotorModel(
         m=m, L=L, I=I_diag, kf=kf, km=km, k_drag=k_drag, k_roll=k_roll, omega_max=omega_max
     )
-
-    controller = LeeSE3Controller(quad)
-    run_simulation()
+    dt = 0.01
+    controller = LeeSE3Controller(quad, dt)
+    smooth_yaw_test(dt=dt, total_time=1.0, initial_yaw=0.0, final_yaw=np.pi/3, yaw_rate=0)

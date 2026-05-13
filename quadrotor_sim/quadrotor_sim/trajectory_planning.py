@@ -181,6 +181,9 @@ class TrajectoryPlanner:
             'omega_dot': omega_dot,
             'thrust': out_thrust,
             'torque': out_torque,
+            'yaw': in_yaw,
+            'yaw_rate': in_yaw_rate,
+            'yaw_acceleration': in_yaw_acceleration,
         }
 
 

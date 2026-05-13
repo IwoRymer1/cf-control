@@ -43,7 +43,7 @@ class LeeSE3Controller:
 
         self.Rd_prev = np.eye(3)
 
-        self.M_max = 1e2
+        self.M_max = 1e-3
 
     def hat(self, x):
         return np.array([[0, -x[2], x[1]], [x[2], 0, -x[0]], [-x[1], x[0], 0]])
@@ -84,16 +84,16 @@ class LeeSE3Controller:
         ex = x - xd
         ev = v - vd
 
-        A = -self.kx @ ex - self.kv @ ev - self.m * self.g * e3 + self.m * ad
+        a_cmd = -self.kx @ ex - self.kv @ ev + ad + self.g * e3
+        F_des = self.m * a_cmd
 
-        f = A @ (R @ e3)
-        f = max(0.0, f)
-
-        # --- attitude construction (same as before) ---
-        if np.linalg.norm(A) < 1e-6:
+        if np.linalg.norm(F_des) < 1e-6:
             b3d = np.array([0.0, 0.0, 1.0])
         else:
-            b3d = A / np.linalg.norm(A)
+            b3d = F_des / np.linalg.norm(F_des)
+
+        f = np.dot(F_des, R @ e3)
+        f = max(0.0, f)
 
         b1c = np.array([np.cos(yaw), np.sin(yaw), 0.0])
 
@@ -109,6 +109,7 @@ class LeeSE3Controller:
             b2d = b2d / norm_b2d
 
         b1d = np.cross(b2d, b3d)
+        b1d /= np.linalg.norm(b1d)
 
         Rd = np.column_stack((b1d, b2d, b3d))
 
@@ -116,11 +117,6 @@ class LeeSE3Controller:
         psi = np.arctan2(R[1, 0], R[0, 0])
 
         yaw_error = np.arctan2(np.sin(psi_d - psi), np.cos(psi_d - psi))
-
-        # =========================================================
-        # THRUST
-        f = np.dot(A, R @ e3)
-        f = max(0.0, f)
 
         # =========================================================
         # ANALYTIC DESIRED ANGULAR VELOCITY
@@ -184,8 +180,8 @@ def run_simulation(test_line=None, dt=0.01, total_time=5.0):
 
     if test_line is None:
         desired_state = {
-            'pos': np.array([0, 0, -3]),
-            'vel': np.zeros(3),
+            'pos': np.array([0, 0, 1]),
+            'vel': np.array([0, 0, 0]),
             'omega': np.array([0, 0, 0]),
             'R': np.eye(3),
             'omega_dot': np.zeros(3),
@@ -286,7 +282,6 @@ def smooth_yaw_test(dt=0.01, total_time=3.0, initial_yaw=0.0, final_yaw=np.pi / 
 if __name__ == '__main__':
     filename = 'trajectory_from_flat_output_test_data.csv'
 
-    filename = 'trajectory_from_flat_output_test_data.csv'
     planner = traj_plan.TrajectoryPlanner(filename)
 
     quad = QuadrotorModel.QuadrotorModel(
@@ -294,5 +289,5 @@ if __name__ == '__main__':
     )
     dt = 0.01
     controller = LeeSE3Controller(quad, dt)
-    smooth_yaw_test(dt=dt, total_time=2.0, initial_yaw=0.0, final_yaw=np.pi / 3, yaw_rate=0)
+    smooth_yaw_test(dt=dt, total_time=2.0, initial_yaw=0.0, final_yaw=-np.pi / 3, yaw_rate=0)
     # run_simulation()

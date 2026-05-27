@@ -180,7 +180,7 @@ def run_simulation(test_line=None, dt=0.01, total_time=5.0):
 
     if test_line is None:
         desired_state = {
-            'pos': np.array([0, 0, 1]),
+            'pos': np.array([1, 1, 0]),
             'vel': np.array([0, 0, 0]),
             'omega': np.array([0, 0, 0]),
             'R': np.eye(3),
@@ -289,5 +289,5 @@ if __name__ == '__main__':
     )
     dt = 0.01
     controller = LeeSE3Controller(quad, dt)
-    smooth_yaw_test(dt=dt, total_time=2.0, initial_yaw=0.0, final_yaw=-np.pi / 3, yaw_rate=0)
-    # run_simulation()
+    #smooth_yaw_test(dt=dt, total_time=2.0, initial_yaw=0.0, final_yaw=-np.pi / 3, yaw_rate=0)
+    run_simulation()

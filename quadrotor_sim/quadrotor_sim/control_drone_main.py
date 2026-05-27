@@ -153,13 +153,13 @@ class QuadrotorModel:
         self.omega = np.array(omega)
 
 
-quad = QuadrotorModel(
-    m=m, L=L, I=I_diag, kf=kf, km=km, k_drag=k_drag, k_roll=k_roll, omega_max=omega_max
-)
-
-
-if __name__ == '__maine__':
+if __name__ == '__main__':
     # hover (powinno wisieć)
+
+    quad = QuadrotorModel(
+        m=m, L=L, I=I_diag, kf=kf, km=km, k_drag=k_drag, k_roll=k_roll, omega_max=omega_max
+    )
+
     u = np.array([m * 9.81 * 1, 0, 0, 0])
 
     for i in range(1000):

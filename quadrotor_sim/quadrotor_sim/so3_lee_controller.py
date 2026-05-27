@@ -1,7 +1,7 @@
 import numpy as np
-import trajectory_planning as traj_plan
 
-import control_drone_main as QuadrotorModel
+from quadrotor_sim import control_drone_main as QuadrotorModel
+from quadrotor_sim import trajectory_planning as traj_plan
 
 m_body = 0.025
 m_prop = 0.0008
@@ -289,5 +289,5 @@ if __name__ == '__main__':
     )
     dt = 0.01
     controller = LeeSE3Controller(quad, dt)
-    #smooth_yaw_test(dt=dt, total_time=2.0, initial_yaw=0.0, final_yaw=-np.pi / 3, yaw_rate=0)
+    # smooth_yaw_test(dt=dt, total_time=2.0, initial_yaw=0.0, final_yaw=-np.pi / 3, yaw_rate=0)
     run_simulation()

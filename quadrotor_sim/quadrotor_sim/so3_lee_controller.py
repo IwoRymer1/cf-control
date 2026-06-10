@@ -43,7 +43,7 @@ class LeeSE3Controller:
 
         self.Rd_prev = np.eye(3)
 
-        self.M_max = 1e-3
+        self.M_max = 1e-2
 
     def hat(self, x):
         return np.array([[0, -x[2], x[1]], [x[2], 0, -x[0]], [-x[1], x[0], 0]])
@@ -62,7 +62,7 @@ class LeeSE3Controller:
         )
         return R
 
-    def control(self, state, desired_state):
+    def control(self, state, desired_state, debug=False, num_steps=0):
         x = state['pos']
         v = state['vel']
         q = state['quat']
@@ -111,26 +111,25 @@ class LeeSE3Controller:
         b1d = np.cross(b2d, b3d)
         b1d /= np.linalg.norm(b1d)
 
-        Rd = np.column_stack((b1d, b2d, b3d))
+        if 'R' in desired_state:
+            Rd = desired_state['R']
+        else:
+            Rd = np.column_stack((b1d, b2d, b3d))
 
         psi_d = np.arctan2(Rd[1, 0], Rd[0, 0])
         psi = np.arctan2(R[1, 0], R[0, 0])
-
         yaw_error = np.arctan2(np.sin(psi_d - psi), np.cos(psi_d - psi))
 
-        # =========================================================
-        # ANALYTIC DESIRED ANGULAR VELOCITY
-        # =========================================================
+        if 'omega' in desired_state:
+            Omegad = desired_state['omega']
+        else:
+            Omega_d_world = np.array([0.0, 0.0, yaw_rate])
+            Omegad = Rd.T @ Omega_d_world
 
-        Omega_d_world = np.array([0.0, 0.0, yaw_rate])
-        Omegad = Rd.T @ Omega_d_world
-
-        # yaw-only motion → no angular acceleration
-        Omegad_dot = np.zeros(3)
-
-        # =========================================================
-        # ATTITUDE ERRORS
-        # =========================================================
+        if 'omega_dot' in desired_state:
+            Omegad_dot = desired_state['omega_dot']
+        else:
+            Omegad_dot = np.zeros(3)
 
         eR = 0.5 * self.vee(Rd.T @ R - R.T @ Rd)
 
@@ -150,6 +149,13 @@ class LeeSE3Controller:
         )
 
         M = np.clip(M, -self.M_max, self.M_max)
+        if debug and num_steps % 10 == 0:
+            print(f'num_steps: {num_steps}')
+            print(f'pos error: {ex}, vel error: {ev}')
+            print(f'yaw error: {yaw_error}')
+            print(f'eR: {eR}, eOmega: {eOmega}')
+            print(f'control output: f={f}, M={M}')
+
         return f, M
 
 

@@ -106,18 +106,31 @@ class TrajectoryPlanner:
         qz = (R[1, 0] - R[0, 1]) / (4 * qw)
         return np.array([qw, qx, qy, qz])
 
-    def get_flat_outputs(self, test_line):
-        in_pos = np.asarray(self.in_pos[test_line])
-        in_vel = np.asarray(self.in_vel[test_line])
-        in_acc = np.asarray(self.in_acc[test_line])
-        in_jerk = np.asarray(self.in_jerk[test_line])
-        in_snap = np.asarray(self.in_snap[test_line])
-        in_yaw = np.asarray(self.in_yaw[test_line])
-        in_yaw_rate = np.asarray(self.in_yaw_rate[test_line])
-        in_yaw_acceleration = np.asarray(self.in_yaw_acceleration[test_line])
-        mass = np.asarray(self.mass[test_line])
-        gravity = np.asarray(self.gravity[test_line])
-        inertia = np.asarray(self.inertia[test_line])
+    def get_flat_outputs(self, test_line, state_data=None):
+        if state_data is None:
+            in_pos = np.asarray(self.in_pos[test_line])
+            in_vel = np.asarray(self.in_vel[test_line])
+            in_acc = np.asarray(self.in_acc[test_line])
+            in_jerk = np.asarray(self.in_jerk[test_line])
+            in_snap = np.asarray(self.in_snap[test_line])
+            in_yaw = np.asarray(self.in_yaw[test_line])
+            in_yaw_rate = np.asarray(self.in_yaw_rate[test_line])
+            in_yaw_acceleration = np.asarray(self.in_yaw_acceleration[test_line])
+            mass = np.asarray(self.mass[test_line])
+            gravity = np.asarray(self.gravity[test_line])
+            inertia = np.asarray(self.inertia[test_line])
+        else:
+            in_pos = self.in_pos
+            in_vel = self.in_vel
+            in_acc = self.in_acc
+            in_jerk = self.in_jerk
+            in_snap = self.in_snap
+            in_yaw = self.in_yaw
+            in_yaw_rate = self.in_yaw_rate
+            in_yaw_acceleration = self.in_yaw_acceleration
+            mass = self.mass
+            gravity = self.gravity
+            inertia = self.inertia
 
         zw = np.array([0, 0, 1])
 
@@ -185,6 +198,44 @@ class TrajectoryPlanner:
             'yaw_rate': in_yaw_rate,
             'yaw_acceleration': in_yaw_acceleration,
         }
+
+
+@staticmethod
+def compute_from_flat_outputs(
+    pos,
+    vel,
+    acc,
+    jerk,
+    snap,
+    yaw,
+    yaw_rate,
+    yaw_acceleration,
+    mass,
+    gravity,
+    inertia,
+):
+    state_data = {
+        'in_pos': np.asarray(pos),
+        'in_vel': np.asarray(vel),
+        'in_acc': np.asarray(acc),
+        'in_jerk': np.asarray(jerk),
+        'in_snap': np.asarray(snap),
+        'in_yaw': float(yaw),
+        'in_yaw_rate': float(yaw_rate),
+        'in_yaw_acceleration': float(yaw_acceleration),
+        'mass': float(mass),
+        'gravity': float(gravity),
+        'inertia': np.asarray(inertia),
+    }
+
+    planner = TrajectoryPlanner(filename=None, state_data=state_data)
+    return planner.get_flat_outputs(test_line=0, state_data=state_data)
+
+
+@staticmethod
+def from_flat_state(state_data):
+    planner = TrajectoryPlanner(filename=None, state_data=state_data)
+    return planner.get_flat_outputs(test_line=0, state_data=state_data)
 
 
 if __name__ == '__main__':

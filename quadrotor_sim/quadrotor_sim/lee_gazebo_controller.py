@@ -17,17 +17,20 @@ from quadrotor_sim.control_drone_main import (
     omega_max,
 )
 from quadrotor_sim.so3_lee_controller import LeeSE3Controller
+from quadrotor_sim.trajectory_planning import TrajectoryPlanner
 
 
 class LeeGazeboController(Node):
-    def __init__(self):
+    def __init__(self, target_pos=np.array([0, 0.0, 3]), target_yaw=0.0):
         super().__init__('lee_gazebo_controller')
 
         self.control_rate_hz = 50.0
         self.dt = 1.0 / self.control_rate_hz
 
-        self.target_pos = np.array([0, 0.0, 3])
-        self.target_yaw = 0.0
+        self.target_pos = target_pos
+        self.target_yaw = target_yaw
+        self.zero3 = np.zeros(3)
+        self.num_steps = 0
 
         model = QuadrotorModel(
             m=m,
@@ -78,20 +81,34 @@ class LeeGazeboController(Node):
         print('pose:', np.array([p.x, p.y, p.z]))
 
     def get_desired_state(self):
-        return {
-            'pos': self.target_pos,
-            'vel': np.zeros(3),
-            'acc': np.zeros(3),
-            'yaw': self.target_yaw,
-            'yaw_rate': 0.0,
+        state_data = {
+            'in_pos': self.target_pos,
+            'in_vel': self.zero3,
+            'in_acc': self.zero3,
+            'in_jerk': self.zero3,
+            'in_snap': self.zero3,
+            'in_yaw': self.target_yaw,
+            'in_yaw_rate': 0.0,
+            'in_yaw_acceleration': 0.0,
+            'mass': m,
+            'gravity': 9.81,
+            'inertia': np.diag(I_diag),
         }
+
+        return TrajectoryPlanner(filename=None, state_data=state_data).get_flat_outputs(
+            test_line=0,
+            state_data=state_data,
+        )
 
     def control_loop(self):
         if self.state is None:
             return
 
         desired_state = self.get_desired_state()
-        thrust, torque = self.controller.control(self.state, desired_state)
+        self.num_steps += 1
+        thrust, torque = self.controller.control(
+            self.state, desired_state, debug=True, num_steps=self.num_steps
+        )
 
         msg = ThrustAndTorque()
         msg.collective_thrust = float(thrust)
@@ -103,10 +120,16 @@ class LeeGazeboController(Node):
 
         self.cmd_pub.publish(msg)
 
+        # print('thrust:', thrust, 'torque:', torque, '\n',
+        #       'desired pos:', desired_state['pos'], 'current pos:', self.state['pos'], '\n',
+        #       'desired vel:', desired_state['vel'], 'current vel:', self.state['vel'], '\n',
+        #       'desired yaw:', desired_state['yaw'], 'current yaw:', self.state['quat'], '\n',
+        #       '---')
+
 
 def main():
     rclpy.init()
-    node = LeeGazeboController()
+    node = LeeGazeboController(target_pos=np.array([1, 0.0, 5]), target_yaw=0.0)
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()

@@ -1,5 +1,27 @@
 import numpy as np
 
+# m_body = 0.025
+# m_prop = 0.0008
+# m = m_body + 4 * m_prop
+
+# I_body = np.array(
+#     [
+#         [16.571710e-6, 0.830806e-6, 0.718277e-6],
+#         [0.830806e-6, 16.655602e-6, 1.800197e-6],
+#         [0.718277e-6, 1.800197e-6, 29.261652e-6],
+#     ]
+# )
+
+# I_diag = np.diag([16.6e-6, 16.7e-6, 29.3e-6])
+
+# L = 0.0438
+
+# kf = 1.28192e-08
+# km = 0.005964552 * kf
+# k_drag = 8.06428e-05
+# k_roll = 1e-7
+# omega_max = 2618
+
 m_body = 0.025
 m_prop = 0.0008
 m = m_body + 4 * m_prop
@@ -14,12 +36,16 @@ I_body = np.array(
 
 I_diag = np.diag([16.6e-6, 16.7e-6, 29.3e-6])
 
-L = 0.0438
+L = 0.031  # if used as moment arm
 
 kf = 1.28192e-08
-km = 0.005964552 * kf
+
+km = 1.28192e-08 * 0.005964552
+# 7.644e-11
+
 k_drag = 8.06428e-05
 k_roll = 1e-7
+
 omega_max = 2618
 
 
@@ -100,7 +126,7 @@ class QuadrotorModel:
         q0 = self.q.copy()
         omega0 = self.omega.copy()
 
-        # k1
+        # k1f
         k1 = self.dynamics_from_state(pos0, vel0, q0, omega0, u)
 
         # k2

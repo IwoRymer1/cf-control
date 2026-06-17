@@ -3,6 +3,28 @@ import numpy as np
 from quadrotor_sim import control_drone_main as QuadrotorModel
 from quadrotor_sim import trajectory_planning as traj_plan
 
+# m_body = 0.025
+# m_prop = 0.0008
+# m = m_body + 4 * m_prop
+
+# I_body = np.array(
+#     [
+#         [16.571710e-6, 0.830806e-6, 0.718277e-6],
+#         [0.830806e-6, 16.655602e-6, 1.800197e-6],
+#         [0.718277e-6, 1.800197e-6, 29.261652e-6],
+#     ]
+# )
+
+# I_diag = np.diag([16.6e-6, 16.7e-6, 29.3e-6])
+
+# L = 0.0438
+
+# kf = 1.28192e-08
+# km = 0.005964552 * kf
+# k_drag = 8.06428e-05
+# k_roll = 1e-7
+# omega_max = 2618
+
 m_body = 0.025
 m_prop = 0.0008
 m = m_body + 4 * m_prop
@@ -17,12 +39,16 @@ I_body = np.array(
 
 I_diag = np.diag([16.6e-6, 16.7e-6, 29.3e-6])
 
-L = 0.0438
+L = 0.031  # if used as moment arm
 
 kf = 1.28192e-08
-km = 0.005964552 * kf
+
+km = 1.28192e-08 * 0.005964552
+# 7.644e-11
+
 k_drag = 8.06428e-05
 k_roll = 1e-7
+
 omega_max = 2618
 
 
@@ -34,16 +60,17 @@ class LeeSE3Controller:
         self.dt = dt
 
         # tunable params
-        self.kx = np.diag([6, 6, 8])
-        self.kv = np.diag([4, 4, 5])
+        self.kx = np.diag([2.5, 2.5, 1.75])
+        self.kv = np.diag([2.0, 2.0, 1.0])
 
-        self.kR = np.diag([2, 2, 0.5])
-        self.kOmega = np.diag([0.05, 0.05, 0.05])
+        self.kR = np.diag([0.01, 0.01, 0.015])
+        self.kOmega = np.diag([0.002, 0.002, 0.005])
+
+        self.M_max = 0.005
+
         self.k_psi = 3.0
 
         self.Rd_prev = np.eye(3)
-
-        self.M_max = 1e-2
 
     def hat(self, x):
         return np.array([[0, -x[2], x[1]], [x[2], 0, -x[0]], [-x[1], x[0], 0]])
@@ -111,25 +138,55 @@ class LeeSE3Controller:
         b1d = np.cross(b2d, b3d)
         b1d /= np.linalg.norm(b1d)
 
-        if 'R' in desired_state:
-            Rd = desired_state['R']
-        else:
-            Rd = np.column_stack((b1d, b2d, b3d))
+        # if 'R' in desired_state:
+        #     Rd = desired_state['R']
+        # else:
+        #     Rd = np.column_stack((b1d, b2d, b3d))
+
+        Rd = np.column_stack((b1d, b2d, b3d))
 
         psi_d = np.arctan2(Rd[1, 0], Rd[0, 0])
         psi = np.arctan2(R[1, 0], R[0, 0])
         yaw_error = np.arctan2(np.sin(psi_d - psi), np.cos(psi_d - psi))
 
-        if 'omega' in desired_state:
-            Omegad = desired_state['omega']
-        else:
-            Omega_d_world = np.array([0.0, 0.0, yaw_rate])
-            Omegad = Rd.T @ Omega_d_world
+        # if 'omega' in desired_state:
+        #     Omegad = desired_state['omega']
+        # else:
+        #     Omega_d_world = np.array([0.0, 0.0, yaw_rate])
+        #     Omegad = Rd.T @ Omega_d_world
 
-        if 'omega_dot' in desired_state:
-            Omegad_dot = desired_state['omega_dot']
-        else:
-            Omegad_dot = np.zeros(3)
+        Omega_d_world = np.array([0.0, 0.0, yaw_rate])
+        Omegad = Rd.T @ Omega_d_world
+
+        # if 'omega_dot' in desired_state:
+        #     Omegad_dot = desired_state['omega_dot']
+        # else:
+        #     Omegad_dot = np.zeros(3)
+
+        Omegad_dot = np.zeros(3)
+
+        if debug and num_steps % 10 == 0:
+            # print('det(Rd) =', np.linalg.det(Rd))
+            # print('b3d =', b3d)
+            # print('R[:,2] =', R[:, 2])
+            # print(
+            #     'angle between =', np.degrees(np.arccos(np.clip(np.dot(b3d, R[:, 2]), -1.0, 1.0)))
+            # )
+            # print('z =', x[2])
+            # print('zd =', xd[2])
+
+            # print('vz =', v[2])
+            # print('vzd =', vd[2])
+
+            # print('ex_z =', ex[2])
+            # print('ev_z =', ev[2])
+
+            # print('a_cmd_z =', a_cmd[2])
+
+            # print('F_des_z =', F_des[2])
+
+            # print('f =', f)
+            print('yaw =', np.degrees(yaw))
 
         eR = 0.5 * self.vee(Rd.T @ R - R.T @ Rd)
 
@@ -141,20 +198,42 @@ class LeeSE3Controller:
         # CONTROL MOMENT
         # =========================================================
 
-        M = (
+        M_raw = (
             -self.kR @ eR
             - self.kOmega @ eOmega
             + np.cross(omega, self.J @ omega)
             - self.J @ (self.hat(omega) @ R.T @ Rd @ Omegad - R.T @ Rd @ Omegad_dot)
         )
 
-        M = np.clip(M, -self.M_max, self.M_max)
+        M = np.clip(M_raw, -self.M_max, self.M_max)
         if debug and num_steps % 10 == 0:
             print(f'num_steps: {num_steps}')
             print(f'pos error: {ex}, vel error: {ev}')
-            print(f'yaw error: {yaw_error}')
-            print(f'eR: {eR}, eOmega: {eOmega}')
-            print(f'control output: f={f}, M={M}')
+            print('position: ', x, 'desired position: ', xd)
+            print(f'yaw error (deg): {np.degrees(yaw_error)}')
+            # print(f'eR: {eR}, eOmega: {eOmega}')
+            # print(f'control output: f={f}, M={M}')
+            # print(f'omega: {omega}, Omegad: {Omegad}')
+            # print(f'norm_omega: {np.linalg.norm(omega)}, norm_Omegad: {np.linalg.norm(Omegad)}')
+            # print(f'quat: {q}, R: {R}, det(R): {np.linalg.det(R)}')
+            # print(f'body z axis: {R[:, 2]}')
+            # print(f'desired_b3d axis: {b3d}')
+            # print('M_raw:', M_raw)
+            # print('M_raw / M_self_max =', M_raw / self.M_max)
+            # print('Rd[:,2]:', Rd[:, 2])
+            # M_eR = -self.kR @ eR
+            # M_eOmega = -self.kOmega @ eOmega
+            # M_gyro = np.cross(omega, self.J @ omega)
+
+            # print('M_eR     =', M_eR)
+            # print('M_eOmega =', M_eOmega)
+            # print('M_gyro   =', M_gyro)
+            # print('M_raw    =', M_eR + M_eOmega + M_gyro)
+            print('psi =', np.degrees(psi))
+            print('psi_d =', np.degrees(psi_d))
+
+        hover = self.m * self.g
+        f = np.clip(f, 0.5 * hover, 2.5 * hover)
 
         return f, M
 

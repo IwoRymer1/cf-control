@@ -1,6 +1,6 @@
 import numpy as np
 import rclpy
-from geometry_msgs.msg import Vector3
+from geometry_msgs.msg import PoseStamped, Vector3
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 
@@ -17,7 +17,6 @@ from quadrotor_sim.control_drone_main import (
     omega_max,
 )
 from quadrotor_sim.so3_lee_controller import LeeSE3Controller
-from quadrotor_sim.trajectory_planning import TrajectoryPlanner
 
 
 class LeeGazeboController(Node):
@@ -31,6 +30,7 @@ class LeeGazeboController(Node):
         self.target_yaw = target_yaw
         self.zero3 = np.zeros(3)
         self.num_steps = 0
+        self.odom_count = 0
 
         model = QuadrotorModel(
             m=m,
@@ -59,6 +59,15 @@ class LeeGazeboController(Node):
             10,
         )
 
+        self.goal_sub = self.create_subscription(
+            PoseStamped,
+            '/cf_control/goal',
+            self.goal_callback,
+            10,
+        )
+        # ros2 topic pub --once /cf_control/goal geometry_msgs/msg/PoseStamped \ "{pose: {position: {x: 5.0, y: 3.0, z: 4.0}}}"
+        # ros2 topic pub --once /cf_control/goal geometry_msgs/msg/PoseStamped \"{pose: {position: {x: 2.0, y: 0.0, z: 5.0}, orientation: {w: 0.7071, x: 0.0, y: 0.0, z: -0.7071}}}"
+
         self.timer = self.create_timer(self.dt, self.control_loop)
 
         self.get_logger().info('LeeGazeboController started')
@@ -78,7 +87,49 @@ class LeeGazeboController(Node):
             'omega': np.array([w.x, w.y, w.z], dtype=float),
         }
 
-        print('pose:', np.array([p.x, p.y, p.z]))
+        self.odom_count += 1
+        if self.odom_count % 10 == 0:
+            print('pose:', np.array([p.x, p.y, p.z]), 'odom_count:', self.odom_count)
+            print('message:', msg.twist.twist.angular)
+
+            print('header.frame_id =', msg.header.frame_id)
+            print('child_frame_id =', msg.child_frame_id)
+
+    def goal_callback(self, msg):
+        p = msg.pose.position
+        q = msg.pose.orientation
+
+        self.target_pos = np.array(
+            [
+                p.x,
+                p.y,
+                p.z,
+            ]
+        )
+
+        self.target_yaw = self.quaternion_to_yaw([q.w, q.x, q.y, q.z])
+
+        self.get_logger().info(
+            f'New goal: pos={self.target_pos}, yaw={np.degrees(self.target_yaw):.1f} deg'
+        )
+
+    def update_target(self, new_target_pos, new_target_yaw):
+        self.target_pos = new_target_pos
+        self.target_yaw = new_target_yaw
+        self.get_logger().info(f'Updated target: pos={new_target_pos}, yaw={new_target_yaw}')
+
+    def quaternion_to_yaw(self, q):
+        """
+        q = [w, x, y, z]
+        returns yaw in radians
+        """
+
+        w, x, y, z = q
+
+        siny_cosp = 2.0 * (w * z + x * y)
+        cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
+
+        return np.arctan2(siny_cosp, cosy_cosp)
 
     def get_desired_state(self):
         state_data = {
@@ -95,10 +146,18 @@ class LeeGazeboController(Node):
             'inertia': np.diag(I_diag),
         }
 
-        return TrajectoryPlanner(filename=None, state_data=state_data).get_flat_outputs(
-            test_line=0,
-            state_data=state_data,
-        )
+        # return TrajectoryPlanner(filename=None, state_data=state_data).get_flat_outputs(
+        #     test_line=0,
+        #     state_data=state_data,
+        # )
+
+        return {
+            'pos': self.target_pos,
+            'vel': np.zeros(3),
+            'acc': np.zeros(3),
+            'yaw': self.target_yaw,
+            'yaw_rate': 0.0,
+        }
 
     def control_loop(self):
         if self.state is None:
@@ -118,18 +177,52 @@ class LeeGazeboController(Node):
             z=float(torque[2]),
         )
 
-        self.cmd_pub.publish(msg)
+        if self.num_steps % 5 == 0:
+            print(
+                f'thrust={thrust:.3f}, ',
+                f'torque=({torque[0]:.4f}, {torque[1]:.4f}, {torque[2]:.4f})',
+            )
+        # print nie dziala
+        # print(
+        #     'thrust:',
+        #     thrust,
+        #     'torque:',
+        #     torque,
+        #     '\n',
+        #     'desired pos:',
+        #     desired_state['pos'],
+        #     'current pos:',
+        #     self.state['pos'],
+        #     '\n',
+        #     'desired vel:',
+        #     desired_state['vel'],
+        #     'current vel:',
+        #     self.state['vel'],
+        #     '\n',
+        #     'desired yaw:',
+        #     desired_state['yaw'],
+        #     'current yaw:',
+        #     self.state['quat'],
+        #     '\n',
+        #     '---',
+        #     'omega:',
+        #     self.state['omega'],
+        #     'norm omega:',
+        #     np.linalg.norm(self.state['omega']),
+        #     'quat:',
+        #     self.state['quat'],
+        #     'det(R):',
+        #     np.linalg.det(self.state['R']),
+        #     'body z axis:',
+        #     self.state['R'][:, 2],
+        # )
 
-        # print('thrust:', thrust, 'torque:', torque, '\n',
-        #       'desired pos:', desired_state['pos'], 'current pos:', self.state['pos'], '\n',
-        #       'desired vel:', desired_state['vel'], 'current vel:', self.state['vel'], '\n',
-        #       'desired yaw:', desired_state['yaw'], 'current yaw:', self.state['quat'], '\n',
-        #       '---')
+        self.cmd_pub.publish(msg)
 
 
 def main():
     rclpy.init()
-    node = LeeGazeboController(target_pos=np.array([1, 0.0, 5]), target_yaw=0.0)
+    node = LeeGazeboController(target_pos=np.array([2, 0, 5]), target_yaw=0.0)
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
